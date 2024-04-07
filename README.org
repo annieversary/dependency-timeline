@@ -3,7 +3,7 @@ tool to get a timeline of versions of a dependency used in a project, using the 
 works for Cargo, Composer, and NPM
 ** example
 #+begin_src bash
-$ dependency-timeline -d axum                                                   0
+$ dependency-timeline -d axum
 Version: 0.4.8, Date: 2022-03-18 16:37:49 UTC
 Version: 0.5.0, Date: 2022-04-01 23:40:11 UTC
 Version: 0.5.1, Date: 2022-04-08 12:54:26 UTC
