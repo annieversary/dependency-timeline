@@ -40,9 +40,6 @@ fn main() -> Result<()> {
         // TODO we probably want to be more selective about which errors are fatal and which are ignorable
         .collect::<Result<Vec<_>>>()?;
 
-    // TODO get an actual timeline
-    // probably fold
-
     let mut previous_version = None;
     let iter = results.into_iter();
     for result in iter.rev() {
@@ -75,6 +72,7 @@ fn get_commits_for_file<'a>(repo: &'a Repository, file_path: &Path) -> Result<Ve
         let parent_tree = if let Ok(parent) = commit.parent(0) {
             parent.tree()?
         } else {
+            commits.push(commit);
             continue;
         };
 
@@ -195,8 +193,28 @@ mod composer {
 
 mod cargo {
     use color_eyre::eyre::Result;
+
+    #[derive(serde::Deserialize, Debug)]
+    struct CargoLock {
+        package: Vec<CargoPackage>,
+    }
+    #[derive(serde::Deserialize, Debug)]
+    struct CargoPackage {
+        /// Package name
+        name: String,
+        /// Package version
+        version: String,
+    }
     pub fn get_library_version(content: &str, library: &str) -> Result<Option<String>> {
-        todo!()
+        let lock: CargoLock = toml::from_str(content)?;
+
+        let package = lock.package.iter().find(|package| package.name == library);
+
+        if let Some(package) = package {
+            Ok(Some(package.version.clone()))
+        } else {
+            Ok(None)
+        }
     }
 }
 
