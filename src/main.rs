@@ -1,5 +1,5 @@
 use std::{
-    path::Path,
+    path::{Path, PathBuf},
     time::{Duration, SystemTime},
 };
 
@@ -15,9 +15,8 @@ struct Args {
     /// Lock file to analyze.
     ///
     /// Supports: `composer.lock`
-    // TODO Make this an option, and detect it automatically if not provided
-    #[arg(short, long, default_value = "composer.lock")]
-    file: String,
+    #[arg(short, long)]
+    file: Option<String>,
 
     /// Name of the library to generate a timeline for
     #[arg(short, long)]
@@ -32,13 +31,17 @@ fn main() -> Result<()> {
 
     let repo = Repository::open_from_env()?;
 
-    let file_path = Path::new(&args.file);
+    let file_path = if let Some(file) = &args.file {
+        PathBuf::from(file)
+    } else {
+        detect_file()?
+    };
 
-    let results = get_commits_for_file(&repo, file_path)?
+    let results = get_commits_for_file(&repo, &file_path)?
         .into_iter()
-        .map(|commit| search_in_file(&repo, commit, file_path, &args.library))
-        // TODO we probably want to be more selective about which errors are fatal and which are ignorable
-        .collect::<Result<Vec<_>>>()?;
+        // TODO we are ignoring some errors due to the flat_map
+        .flat_map(|commit| search_in_file(&repo, commit, &file_path, &args.library))
+        .collect::<Vec<_>>();
 
     let mut previous_version = None;
     let iter = results.into_iter();
@@ -57,6 +60,21 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn detect_file() -> Result<PathBuf> {
+    let paths = ["Cargo.lock", "composer.lock", "package-lock.json"];
+
+    for path in paths {
+        let file = PathBuf::from(path);
+        if file.exists() {
+            return Ok(file);
+        }
+    }
+
+    Err(eyre!(
+        "Couldn't automatically detect file, please specify one with the --file flag"
+    ))
 }
 
 fn get_commits_for_file<'a>(repo: &'a Repository, file_path: &Path) -> Result<Vec<Commit<'a>>> {
@@ -101,9 +119,6 @@ fn search_in_file(
     file_path: &Path,
     library: &str,
 ) -> Result<SearchResult> {
-    // TODO open file in the commit
-    // TODO parse and find the version for that library
-
     let Ok(blob) = commit
         .tree()?
         .get_path(Path::new(file_path))?
@@ -123,7 +138,7 @@ fn search_in_file(
     let version = if let Some(file_type) = file_type {
         file_type.get_library_version(&content, library)?
     } else {
-        todo!("try to detect FileType from the contents");
+        todo!("Unimplemented: Can't automatically detect file type from file contents");
     };
 
     Ok(SearchResult {
