@@ -18,10 +18,9 @@ struct Args {
     #[arg(short, long)]
     file: Option<String>,
 
-    /// Name of the library to generate a timeline for
+    /// Name of the dependency to generate a timeline for
     #[arg(short, long)]
-    library: String,
-    // TODO option to select the repo
+    dependency: String,
 }
 
 fn main() -> Result<()> {
@@ -40,7 +39,7 @@ fn main() -> Result<()> {
     let results = get_commits_for_file(&repo, &file_path)?
         .into_iter()
         // TODO we are ignoring some errors due to the flat_map
-        .flat_map(|commit| search_in_file(&repo, commit, &file_path, &args.library))
+        .flat_map(|commit| search_in_file(&repo, commit, &file_path, &args.dependency))
         .collect::<Vec<_>>();
 
     let mut previous_version = None;
@@ -96,7 +95,7 @@ fn get_commits_for_file<'a>(repo: &'a Repository, file_path: &Path) -> Result<Ve
 
         let mut diff_opts = DiffOptions::new();
         diff_opts.pathspec(file_path);
-        // we dont add `library` to the diff_opts, cause a version upgrade might not change a line that contains `library`
+        // we dont add `dependency` to the diff_opts, cause a version upgrade might not change a line that contains `dependency`
         let diff = repo.diff_tree_to_tree(Some(&parent_tree), Some(&tree), Some(&mut diff_opts))?;
 
         if diff.deltas().len() > 0 {
@@ -117,7 +116,7 @@ fn search_in_file(
     repo: &Repository,
     commit: Commit<'_>,
     file_path: &Path,
-    library: &str,
+    dependency: &str,
 ) -> Result<SearchResult> {
     let Ok(blob) = commit
         .tree()?
@@ -136,7 +135,7 @@ fn search_in_file(
         .and_then(PackageManager::guess_from_file_name);
 
     let version = if let Some(file_type) = file_type {
-        file_type.get_library_version(&content, library)?
+        file_type.get_dependency_version(&content, dependency)?
     } else {
         todo!("Unimplemented: Can't automatically detect file type from file contents");
     };
@@ -169,11 +168,11 @@ impl PackageManager {
         }
     }
 
-    fn get_library_version(&self, content: &str, library: &str) -> Result<Option<String>> {
+    fn get_dependency_version(&self, content: &str, dependency: &str) -> Result<Option<String>> {
         match self {
-            PackageManager::Composer => composer::get_library_version(content, library),
-            PackageManager::Cargo => cargo::get_library_version(content, library),
-            PackageManager::Npm => npm::get_library_version(content, library),
+            PackageManager::Composer => composer::get_dependency_version(content, dependency),
+            PackageManager::Cargo => cargo::get_dependency_version(content, dependency),
+            PackageManager::Npm => npm::get_dependency_version(content, dependency),
         }
     }
 }
@@ -193,10 +192,13 @@ mod composer {
         version: String,
     }
 
-    pub fn get_library_version(content: &str, library: &str) -> Result<Option<String>> {
+    pub fn get_dependency_version(content: &str, dependency: &str) -> Result<Option<String>> {
         let lock: ComposerLock = serde_json::from_str(content)?;
 
-        let package = lock.packages.iter().find(|package| package.name == library);
+        let package = lock
+            .packages
+            .iter()
+            .find(|package| package.name == dependency);
 
         if let Some(package) = package {
             Ok(Some(package.version.clone()))
@@ -220,10 +222,13 @@ mod cargo {
         /// Package version
         version: String,
     }
-    pub fn get_library_version(content: &str, library: &str) -> Result<Option<String>> {
+    pub fn get_dependency_version(content: &str, dependency: &str) -> Result<Option<String>> {
         let lock: CargoLock = toml::from_str(content)?;
 
-        let package = lock.package.iter().find(|package| package.name == library);
+        let package = lock
+            .package
+            .iter()
+            .find(|package| package.name == dependency);
 
         if let Some(package) = package {
             Ok(Some(package.version.clone()))
@@ -248,12 +253,12 @@ mod npm {
         version: Option<String>,
     }
 
-    pub fn get_library_version(content: &str, library: &str) -> Result<Option<String>> {
+    pub fn get_dependency_version(content: &str, dependency: &str) -> Result<Option<String>> {
         let lock: NpmLock = serde_json::from_str(content)?;
 
         if let Some(NpmPackage {
             version: Some(version),
-        }) = lock.packages.get(&format!("node_modules/{library}"))
+        }) = lock.packages.get(&format!("node_modules/{dependency}"))
         {
             Ok(Some(version.clone()))
         } else {
