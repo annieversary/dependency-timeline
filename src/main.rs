@@ -13,8 +13,6 @@ use git2::{Commit, DiffOptions, Repository};
 #[command(version, about, long_about = None)]
 struct Args {
     /// Lock file to analyze.
-    ///
-    /// Supports: `composer.lock`
     #[arg(short, long)]
     file: Option<String>,
 
