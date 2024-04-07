@@ -8,7 +8,6 @@ use clap::Parser;
 use color_eyre::eyre::{eyre, Result};
 use git2::{Commit, DiffOptions, Repository};
 
-/// Simple program to greet a person
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
